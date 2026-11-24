@@ -240,7 +240,13 @@ final class ThunderduckDatabaseMetaData implements DatabaseMetaData {
     @Override public String getURL() { return "jdbc:thunderduck://" + url.replaceFirst("^https?://", ""); }
     @Override public String getUserName() { return ""; }
     @Override public String getDriverName() { return "thunderduck JDBC driver"; }
-    @Override public String getDriverVersion() { return "0.2.1"; }
+    @Override
+    public String getDriverVersion() {
+        // Set by maven-jar-plugin's manifestEntries; when running from
+        // target/classes there is no manifest, so fall back to MAJOR.MINOR.
+        String version = getClass().getPackage().getImplementationVersion();
+        return version != null ? version : ThunderduckDriver.MAJOR + "." + ThunderduckDriver.MINOR;
+    }
     @Override public int getDriverMajorVersion() { return ThunderduckDriver.MAJOR; }
     @Override public int getDriverMinorVersion() { return ThunderduckDriver.MINOR; }
     @Override public String getDatabaseProductName() { return "thunderduck"; }

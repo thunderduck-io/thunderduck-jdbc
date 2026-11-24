@@ -12,7 +12,7 @@ Zero runtime dependencies (JDK `HttpClient` + a tiny JSON parser).
 
 ```bash
 mvn -q -DskipTests package
-# → target/thunderduck-jdbc-0.2.7.jar
+# → target/thunderduck-jdbc-<version>.jar
 ```
 
 (No Maven? It's pure JDK — `javac -d out $(find src/main/java -name '*.java')` then
@@ -28,8 +28,7 @@ mvn -q -DskipTests package
   opens your browser at connect time (desktop only; servers, containers and CI use API
   tokens). Values: `auth` = `token` (default) | `browser`; `tokenCache` =
   `file` (default; refresh token in `~/.thunderduck/credentials.json`, owner-only) | `none`
-  (nothing on disk); `issuer` — the sign-in server. Defaulted from the host you connect to
-  from the host you connect to: the driver asks it (`/.well-known/oauth-protected-resource`)
+  (nothing on disk); `issuer` — the sign-in server. Defaulted from the host you connect to: the driver asks it (`/.well-known/oauth-protected-resource`)
   which sign-in server it belongs to. It accepts exactly the host your naming implies —
   `<company>-api.<domain>` → `<company>-auth.<domain>` — and nothing else; an install that names
   its realm differently passes `issuer=`, which always overrides. Loopback sign-in is accepted
@@ -39,7 +38,7 @@ mvn -q -DskipTests package
 - **Token:** create one in the console under **API Tokens** (a `tdk_…` value; shown once).
 
 ### DBeaver / DataGrip
-Add `thunderduck-jdbc-0.2.7.jar` as a new driver (class `io.thunderduck.jdbc.ThunderduckDriver`,
+Add the jar from `target/` (`thunderduck-jdbc-<version>.jar`) as a new driver (class `io.thunderduck.jdbc.ThunderduckDriver`,
 URL template `jdbc:thunderduck://{host}/`), then connect with your `tdk_…` token as the password.
 
 ### Java
