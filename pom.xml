@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.thunderduck</groupId>
+  <artifactId>thunderduck-jdbc</artifactId>
+  <version>0.2.7</version>
+  <packaging>jar</packaging>
+
+  <name>Thunderduck JDBC driver</name>
+  <!-- Shown on Maven Central / mvnrepository as ONE plain-text paragraph: line breaks are dropped,
+       nothing is rendered as a list or a link. Keep it to a few sentences; the repository link is
+       the SCM block below. -->
+  <description>The JDBC driver for Thunderduck, the DuckDB-powered data warehouse. Connect DataGrip, DBeaver, IntelliJ or any JDBC tool to jdbc:thunderduck://api.thunderduck.ai/ (driver class io.thunderduck.jdbc.ThunderduckDriver) and query every catalog your account can see, including Iceberg, PostgreSQL, MySQL, BigQuery, SQL Server, Oracle and files in S3, GCS or Azure, as catalog.schema.table. Sign in with your Thunderduck account (auth=browser), or use an API token for servers and CI. Pure Java 17, no dependencies. Setup guide: https://docs.thunderduck.ai/clients/jdbc/</description>
+  <url>https://docs.thunderduck.ai/clients/jdbc/</url>
+
+  <!-- Required by Maven Central for every publish. -->
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <name>Thunderduck</name>
+      <email>developer@thunderduck.io</email>
+      <organization>Thunderduck</organization>
+      <organizationUrl>https://thunderduck.ai</organizationUrl>
+    </developer>
+  </developers>
+
+  <!-- Required by Central. The browsable url is the docs page; connection
+       must be a git URL and only appears in the raw pom. -->
+  <scm>
+    <connection>scm:git:https://github.com/thunderduck-io/thunderduck-jdbc.git</connection>
+    <developerConnection>scm:git:https://github.com/thunderduck-io/thunderduck-jdbc.git</developerConnection>
+    <url>https://github.com/thunderduck-io/thunderduck-jdbc</url>
+  </scm>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <!-- Zero runtime dependencies: JDK HttpClient + a tiny JSON parser. So the
+       jar is self-contained with no shading. JUnit below is test-scope only
+       (verification tooling), not something the shipped jar depends on. -->
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>thunderduck-jdbc-${project.version}</finalName>
+    <!-- Ship the license text inside the jar, as META-INF/LICENSE, alongside
+         the services file in src/main/resources. -->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>${project.basedir}</directory>
+        <includes>
+          <include>LICENSE</include>
+        </includes>
+        <targetPath>META-INF</targetPath>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.1</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <!-- Headless, so no test can open a real browser (auth=browser refuses to sign in). -->
+          <systemPropertyVariables>
+            <java.awt.headless>true</java.awt.headless>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <!-- Everything Central Portal needs beyond a plain jar (sources, javadoc,
+       GPG signatures, the actual publish step) lives in this profile rather
+       than the default build: signing every local `mvn package` would be
+       slow and needs a key that most contributors don't have. Only the
+       tag-triggered release job in .github/workflows/publish-jdbc.yml
+       activates it, with `-P release`. -->
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.6.3</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.7</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <configuration>
+                  <!-- gpg-agent can't prompt interactively in CI; read the
+                       passphrase from the GPG_PASSPHRASE env var instead
+                       (set by .github/workflows/publish-jdbc.yml) and pass
+                       it via loopback pinentry. -->
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.9.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <!-- Matches the <server><id>central</id> the workflow writes
+                   into settings.xml via actions/setup-java's server-id. -->
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

@@ -1,0 +1,111 @@
+package io.thunderduck.jdbc;
+
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.SQLWarning;
+import java.util.List;
+
+/** Forward-only, read-oriented Statement: each query runs as a thunderduck Job. */
+class ThunderduckStatement implements java.sql.Statement {
+
+    protected final ThunderduckConnection connection;
+    protected final ApiClient api;
+    protected int fetchSize = 1000;
+    protected int maxRows = 0;
+    protected int queryTimeoutSec = 0;
+    protected boolean closed;
+    protected ThunderduckResultSet current;
+
+    ThunderduckStatement(ThunderduckConnection connection, ApiClient api) {
+        this.connection = connection;
+        this.api = api;
+    }
+
+    protected ThunderduckResultSet run(String sql) throws SQLException {
+        if (closed) throw new SQLException("statement is closed");
+        // store-then-fetch: submit the query, poll its status to a terminal
+        // state (throwing on error/cancelled/timeout), then page the stored
+        // result. There is no live row stream — the API stores a Parquet
+        // result and serves it back through paginated GETs.
+        String execId = api.submitQuery(sql);
+        long timeoutMs = queryTimeoutSec > 0 ? queryTimeoutSec * 1000L : 0L;
+        api.awaitExecution(execId, timeoutMs);
+        ApiClient.ResultPage first = api.fetchResultPage(execId, fetchSize, 0);
+        if (first == null) {
+            // No stored result at all (e.g. a non-SELECT statement): an empty,
+            // zero-column result rather than a paging attempt.
+            first = new ApiClient.ResultPage();
+            first.columns = List.of();
+            first.columnTypes = List.of();
+            first.rows = List.of();
+            first.total = 0;
+        }
+        current = new ThunderduckResultSet(api, execId, this, fetchSize, first);
+        return current;
+    }
+
+    @Override public ResultSet executeQuery(String sql) throws SQLException { return run(sql); }
+
+    @Override public boolean execute(String sql) throws SQLException {
+        run(sql);
+        return current.getMetaData().getColumnCount() > 0;
+    }
+
+    @Override public int executeUpdate(String sql) throws SQLException {
+        run(sql);
+        return 0; // no reliable affected-row count from the query path
+    }
+
+    @Override public ResultSet getResultSet() { return current; }
+    @Override public int getUpdateCount() { return -1; }
+    @Override public boolean getMoreResults() { return false; }
+    @Override public boolean getMoreResults(int current) { return false; }
+
+    @Override public Connection getConnection() { return connection; }
+    @Override public void close() { closed = true; if (current != null) current.close(); }
+    @Override public boolean isClosed() { return closed; }
+
+    @Override public int getFetchSize() { return fetchSize; }
+    @Override public void setFetchSize(int rows) { if (rows > 0) fetchSize = rows; }
+    @Override public int getMaxRows() { return maxRows; }
+    @Override public void setMaxRows(int max) { maxRows = max; }
+    @Override public long getLargeMaxRows() { return maxRows; }
+    @Override public void setLargeMaxRows(long max) { maxRows = (int) max; }
+    @Override public int getQueryTimeout() { return queryTimeoutSec; }
+    @Override public void setQueryTimeout(int seconds) { queryTimeoutSec = seconds; }
+    @Override public int getFetchDirection() { return ResultSet.FETCH_FORWARD; }
+    @Override public void setFetchDirection(int direction) { }
+    @Override public int getResultSetType() { return ResultSet.TYPE_FORWARD_ONLY; }
+    @Override public int getResultSetConcurrency() { return ResultSet.CONCUR_READ_ONLY; }
+    @Override public int getResultSetHoldability() { return ResultSet.CLOSE_CURSORS_AT_COMMIT; }
+    @Override public int getMaxFieldSize() { return 0; }
+    @Override public void setMaxFieldSize(int max) { }
+    @Override public void setEscapeProcessing(boolean enable) { }
+    @Override public boolean isPoolable() { return false; }
+    @Override public void setPoolable(boolean poolable) { }
+    @Override public void setCursorName(String name) { }
+    @Override public void cancel() { }
+    @Override public SQLWarning getWarnings() { return null; }
+    @Override public void clearWarnings() { }
+    @Override public void closeOnCompletion() { }
+    @Override public boolean isCloseOnCompletion() { return false; }
+
+    // batches / generated keys — unsupported
+    @Override public void addBatch(String sql) throws SQLException { throw Err.nyi("addBatch"); }
+    @Override public void clearBatch() throws SQLException { throw Err.nyi("clearBatch"); }
+    @Override public int[] executeBatch() throws SQLException { throw Err.nyi("executeBatch"); }
+    @Override public ResultSet getGeneratedKeys() throws SQLException { throw Err.nyi("getGeneratedKeys"); }
+    @Override public int executeUpdate(String sql, int agk) throws SQLException { throw Err.nyi("executeUpdate(autoGeneratedKeys)"); }
+    @Override public int executeUpdate(String sql, int[] ci) throws SQLException { throw Err.nyi("executeUpdate(columnIndexes)"); }
+    @Override public int executeUpdate(String sql, String[] cn) throws SQLException { throw Err.nyi("executeUpdate(columnNames)"); }
+    @Override public boolean execute(String sql, int agk) throws SQLException { throw Err.nyi("execute(autoGeneratedKeys)"); }
+    @Override public boolean execute(String sql, int[] ci) throws SQLException { throw Err.nyi("execute(columnIndexes)"); }
+    @Override public boolean execute(String sql, String[] cn) throws SQLException { throw Err.nyi("execute(columnNames)"); }
+
+    @Override public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (iface.isInstance(this)) return iface.cast(this);
+        throw new SQLException("not a wrapper for " + iface);
+    }
+    @Override public boolean isWrapperFor(Class<?> iface) { return iface.isInstance(this); }
+}
